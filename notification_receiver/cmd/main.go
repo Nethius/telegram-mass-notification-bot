@@ -9,7 +9,6 @@ import (
 	"os"
 
 	"notification_receiver/internal/handlers"
-	"notification_receiver/internal/model"
 	"notification_receiver/internal/publisher"
 
 	"github.com/gorilla/mux"
@@ -20,33 +19,35 @@ import (
 
 func main() {
 	mainLogger := initLogger()
-	logger := mainLogger.With().Str("component", "Main").Logger()
+	logger := mainLogger.With().Str("component", "main").Logger()
 
 	err := godotenv.Load()
 	if err != nil {
 		logger.Panic().Msg(err.Error())
 	}
 
-	connStr, err := getPostgresCredentials()
+	postgresCredentials, err := getPostgresCredentials()
 	if err != nil {
 		logger.Panic().Msgf("failed to get db credentials from env: %v", err)
 	}
 
-	db, err := sql.Open("postgres", connStr)
+	db, err := sql.Open("postgres", postgresCredentials)
 	if err != nil {
 		logger.Panic().Msgf("failed to open db connection: %v", err)
 	}
+	// TODO handle error
 	defer db.Close()
 
 	repository := postgres.NewRepository(db)
 
-	notifications := make(chan model.Notification)
-	addNotificationHandler := addNotifications.NewHandler(repository, logger, notifications)
+	publisherService, err := publisher.NewService(logger)
+	if err != nil {
+		logger.Panic().Msgf("failed to connect to rabbitmq: %v", err)
+	}
+	// TODO handle error
+	defer publisherService.Close()
 
-	publisherService := publisher.NewService(logger, notifications)
-
-	// TODO handle errors
-	go publisherService.StartPublishing()
+	addNotificationHandler := addNotifications.NewHandler(repository, logger, publisherService)
 
 	httpServerCredentials, err := getHttpServerCredentials()
 	if err != nil {
@@ -54,10 +55,9 @@ func main() {
 	}
 
 	router := mux.NewRouter()
-	// TODO change api endpoint
-	router.HandleFunc("/", addNotificationHandler.AddNotification).Methods("POST")
+	router.HandleFunc("/api/add-notification", addNotificationHandler.AddNotification).Methods("POST")
 
-	logger.Fatal().Msgf("failed to listen ws server: %v", http.ListenAndServe(httpServerCredentials, router))
+	logger.Fatal().Msgf("failed to listen http server: %v", http.ListenAndServe(httpServerCredentials, router))
 }
 
 func initLogger() zerolog.Logger {

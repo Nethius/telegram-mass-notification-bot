@@ -16,7 +16,7 @@ import (
 
 func main() {
 	mainLogger := initLogger()
-	logger := mainLogger.With().Str("component", "Main").Logger()
+	logger := mainLogger.With().Str("component", "main").Logger()
 
 	err := godotenv.Load()
 	if err != nil {
@@ -32,11 +32,12 @@ func main() {
 	if err != nil {
 		logger.Panic().Msgf("failed to open db connection: %v", err)
 	}
+	// TODO handle error
 	defer db.Close()
 
 	repository := postgres.NewRepository(db)
 	parser := command_parser.NewService(logger, repository)
-	tgApiService := telegram_api.NewService(logger, *parser)
+	tgApiService := telegram_api.NewService(logger, parser)
 
 	logger.Fatal().Msgf("failed to listen telegram api server: %v", tgApiService.ListenAndServe())
 }

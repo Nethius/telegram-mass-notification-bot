@@ -13,7 +13,7 @@ import (
 
 func main() {
 	mainLogger := initLogger()
-	logger := mainLogger.With().Str("component", "Main").Logger()
+	logger := mainLogger.With().Str("component", "main").Logger()
 
 	err := godotenv.Load()
 	if err != nil {

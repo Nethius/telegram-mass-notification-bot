@@ -69,7 +69,7 @@ func (s *Service) StartConsuming() error {
 	}
 
 	for message := range messages {
-		s.logger.Info().Msgf("Received a message from message publisher: %s", message.Body)
+		s.logger.Info().Msgf("received a message from message publisher: %s", message.Body)
 		var notification model.Notification
 		err := json.Unmarshal(message.Body, &notification)
 		if err != nil {

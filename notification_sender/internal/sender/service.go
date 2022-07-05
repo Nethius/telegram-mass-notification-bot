@@ -34,7 +34,7 @@ func (s *Service) StartSending() error {
 		notification := <-s.notifications
 
 		for _, recipient := range notification.RecipientsId {
-			s.logger.Info().Msgf("Received a message from message consumer: %s", recipient)
+			s.logger.Info().Msgf("received a message from message consumer: %s", recipient)
 			id, _ := strconv.ParseInt(recipient, 10, 64)
 			message := tgbotapi.NewMessage(id, notification.Message)
 

@@ -1,18 +1,23 @@
 package telegram_api
 
 import (
-	"configuration_parser/internal/command_parser"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/rs/zerolog"
 	"os"
 )
 
-type Service struct {
-	logger zerolog.Logger
-	parser command_parser.Service
+type parser interface {
+	Start(userId int64, userName string) string
+	GrantAccess(userId int64, request string) string
+	RemoveAccess(userId int64, request string) string
 }
 
-func NewService(logger zerolog.Logger, commandParser command_parser.Service) *Service {
+type Service struct {
+	logger zerolog.Logger
+	parser parser
+}
+
+func NewService(logger zerolog.Logger, commandParser parser) *Service {
 	l := logger.With().Str("component", "telegram_api").Logger()
 
 	return &Service{
@@ -45,6 +50,7 @@ func (s *Service) ListenAndServe() error {
 			msg := tgbotapi.NewMessage(update.Message.Chat.ID, "")
 
 			switch update.Message.Command() {
+			//TODO add command to view list of all user with access
 			case "start":
 				msg.Text = s.parser.Start(update.Message.Chat.ID, update.Message.Chat.UserName)
 			case "grant_access":
