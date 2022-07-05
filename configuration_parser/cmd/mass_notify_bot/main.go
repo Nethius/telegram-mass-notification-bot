@@ -3,12 +3,12 @@ package main
 import (
 	"configuration_parser/internal/command_parser"
 	"configuration_parser/internal/repository/postgres"
+	"configuration_parser/internal/telegram_api"
 	"database/sql"
 	"errors"
 	"fmt"
 	"os"
 
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 	"github.com/rs/zerolog"
@@ -35,48 +35,10 @@ func main() {
 	defer db.Close()
 
 	repository := postgres.NewRepository(db)
-	parser := command_parser.NewService(repository)
+	parser := command_parser.NewService(logger, repository)
+	tgApiService := telegram_api.NewService(logger, *parser)
 
-	bot, err := tgbotapi.NewBotAPI(os.Getenv("TELEGRAM_APITOKEN"))
-	if err != nil {
-		logger.Panic().Msg(err.Error())
-	}
-
-	bot.Debug = true //TODO remove
-
-	updateConfig := tgbotapi.NewUpdate(0)
-	updateConfig.Timeout = 30
-
-	updates := bot.GetUpdatesChan(updateConfig)
-
-	for update := range updates {
-		if update.Message == nil {
-			continue
-		}
-
-		//TODO логгировать все сообщения ?
-
-		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "")
-
-		switch update.Message.Command() {
-		case "start":
-			msg.Text = parser.Start(update.Message.Chat.ID, update.Message.Chat.UserName)
-		case "grant_access":
-			msg.Text = parser.GrantAccess(update.Message.Chat.ID, update.Message.Text)
-		case "remove_access":
-			msg.Text = parser.RemoveAccess(update.Message.Chat.ID, update.Message.Text)
-		default:
-			msg.Text = "Command list:\n\n" +
-				"/start - join the list of active users.\n\n" +
-				"/exit - ?\n\n" +
-				"/grant_access @username - let user - @username send me notifications.\n\n" +
-				"/remove_access @username - prevent user - @username send me notifications."
-		}
-
-		if _, err := bot.Send(msg); err != nil {
-			logger.Panic().Msg(err.Error()) // TODO not panic
-		}
-	}
+	logger.Fatal().Msgf("failed to listen telegram api server: %v", tgApiService.ListenAndServe())
 }
 
 func initLogger() zerolog.Logger {

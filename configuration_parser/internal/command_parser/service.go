@@ -3,6 +3,7 @@ package command_parser
 import (
 	"configuration_parser/internal/repository"
 	"fmt"
+	"github.com/rs/zerolog"
 	"strings"
 )
 
@@ -14,19 +15,28 @@ type repo interface {
 }
 
 type Service struct {
-	repo repo
+	logger zerolog.Logger
+	repo   repo
 }
 
-func NewService(repo repo) *Service {
+func NewService(logger zerolog.Logger, repo repo) *Service {
+	l := logger.With().Str("component", "command_parser").Logger()
+
 	return &Service{
-		repo: repo,
+		logger: l,
+		repo:   repo,
 	}
 }
 
 func (s *Service) Start(userId int64, userName string) string {
+	if len(userName) < 0 {
+		return "You must specify a username for your profile in the telegram settings.\n\n" +
+			"Open Telegram -> Settings -> Edit profile -> Enter username"
+	}
+
 	err := s.repo.InsertUser(userId, userName)
 	if err != nil {
-		// TODO log
+		s.logger.Error().Msgf("failed to insert user in database, %v", err)
 		// TODO check isActive
 		switch err {
 		case repository.ErrAlreadyExists:
@@ -55,7 +65,7 @@ func (s *Service) GrantAccess(userId int64, request string) string {
 
 	err = s.repo.AddNotificationAccess(userId, userNameWithAccess)
 	if err != nil {
-		// TODO log
+		s.logger.Error().Msgf("failed to add notification access database, %v", err)
 		switch err {
 		case repository.ErrAlreadyExists:
 			return fmt.Sprintf("@%s already has access to send you notifications.", userNameWithAccess)
@@ -84,7 +94,7 @@ func (s *Service) RemoveAccess(userId int64, request string) string {
 
 	err = s.repo.RemoveNotificationAccess(userId, userNameWithAccess)
 	if err != nil {
-		// TODO log
+		s.logger.Error().Msgf("failed to remove notification access database, %v", err)
 		switch err {
 		case repository.ErrNotExists:
 			return fmt.Sprintf("@%s does not have access to send you notifications.", userNameWithAccess)
