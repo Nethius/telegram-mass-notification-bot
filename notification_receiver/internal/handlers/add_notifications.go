@@ -55,6 +55,7 @@ func (h *Handler) respond(w http.ResponseWriter, data interface{}, code int) {
 }
 
 func (h *Handler) AddNotification(w http.ResponseWriter, r *http.Request) {
+	h.logger.Info().Msgf("received a new notification: %s", r.Body)
 	notification := model.Notification{}
 	err := json.NewDecoder(r.Body).Decode(&notification)
 	if err != nil {

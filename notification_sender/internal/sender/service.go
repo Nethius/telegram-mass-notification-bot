@@ -11,36 +11,33 @@ import (
 )
 
 type Service struct {
-	logger        zerolog.Logger
-	notifications chan model.Notification
+	logger zerolog.Logger
+	botApi *tgbotapi.BotAPI
 }
 
-func NewService(logger zerolog.Logger, notifications chan model.Notification) *Service {
+func NewService(logger zerolog.Logger) (*Service, error) {
 	l := logger.With().Str("component", "sender").Logger()
 
-	return &Service{
-		logger:        l,
-		notifications: notifications,
-	}
-}
-
-func (s *Service) StartSending() error {
 	bot, err := tgbotapi.NewBotAPI(os.Getenv("TELEGRAM_APITOKEN"))
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	for {
-		notification := <-s.notifications
+	return &Service{
+		logger: l,
+		botApi: bot,
+	}, nil
+}
 
-		for _, recipient := range notification.RecipientsId {
-			s.logger.Info().Msgf("received a message from message consumer: %s", recipient)
-			id, _ := strconv.ParseInt(recipient, 10, 64)
-			message := tgbotapi.NewMessage(id, notification.Message)
+func (s *Service) Send(notification model.Notification) error {
+	for _, recipient := range notification.RecipientsId {
+		id, _ := strconv.ParseInt(recipient, 10, 64)
+		message := tgbotapi.NewMessage(id, notification.Message)
 
-			if _, err := bot.Send(message); err != nil {
-				s.logger.Error().Msgf("failed to send message to telegram: %v", err)
-			}
+		if _, err := s.botApi.Send(message); err != nil {
+			s.logger.Error().Msgf("failed to send message to telegram: %v", err)
+			return err
 		}
 	}
+	return nil
 }

@@ -67,6 +67,9 @@ func (s *Service) ListenAndServe() error {
 
 			if _, err := bot.Send(msg); err != nil {
 				s.logger.Error().Msgf("failed to send response to telegram, %v", err)
+			} else {
+				s.logger.Info().Msgf("send message to tg api. id: %v, nickname: %v, message: %v",
+					update.Message.Chat.ID, update.Message.Chat.UserName, msg.Text)
 			}
 		}(update)
 	}

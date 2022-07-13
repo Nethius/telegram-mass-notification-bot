@@ -4,7 +4,6 @@ import (
 	"os"
 
 	"notification_sender/internal/consumer"
-	"notification_sender/internal/model"
 	"notification_sender/internal/sender"
 
 	"github.com/joho/godotenv"
@@ -20,15 +19,21 @@ func main() {
 		logger.Panic().Msg(err.Error())
 	}
 
-	notifications := make(chan model.Notification)
-	consumerService := consumer.NewService(logger, notifications)
+	sendingService, err := sender.NewService(logger)
+	if err != nil {
+		logger.Panic().Msgf("failed to connect to telegram api: %v", err)
+	}
+
+	consumerService, err := consumer.NewService(logger, sendingService)
+	if err != nil {
+		logger.Panic().Msgf("failed to connect to rabbitmq: %v", err)
+	}
+	// TODO handle errors
+	defer consumerService.Close()
 
 	// TODO handle errors
-	go consumerService.StartConsuming()
+	consumerService.StartConsuming()
 
-	sendingService := sender.NewService(logger, notifications)
-	// TODO handle errors
-	sendingService.StartSending()
 }
 
 func initLogger() zerolog.Logger {
