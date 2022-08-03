@@ -8,7 +8,7 @@ import (
 	"notification_receiver/internal/repository/postgres"
 	"os"
 
-	"notification_receiver/internal/handlers"
+	addNotifications "notification_receiver/internal/handlers"
 	"notification_receiver/internal/publisher"
 
 	"github.com/gorilla/mux"

@@ -3,7 +3,6 @@ package command_parser
 import (
 	"configuration_parser/internal/repository"
 	"fmt"
-	"github.com/rs/zerolog"
 	"strings"
 )
 
@@ -15,93 +14,85 @@ type repo interface {
 }
 
 type Service struct {
-	logger zerolog.Logger
-	repo   repo
+	repo repo
 }
 
-func NewService(logger zerolog.Logger, repo repo) *Service {
-	l := logger.With().Str("component", "command_parser").Logger()
-
+func NewService(repo repo) *Service {
 	return &Service{
-		logger: l,
-		repo:   repo,
+		repo: repo,
 	}
 }
 
-func (s *Service) Start(userId int64, userName string) string {
+func (s *Service) Start(userId int64, userName string) (string, error) {
 	if len(userName) < 0 {
-		return "You must specify a username for your profile in the telegram settings.\n\n" +
-			"Open Telegram -> Settings -> Edit profile -> Enter username"
+		return MissingUserName, nil
 	}
 
 	err := s.repo.InsertUser(userId, userName)
 	if err != nil {
-		s.logger.Error().Msgf("failed to insert user in database, %v", err)
 		// TODO check isActive
 		switch err {
 		case repository.ErrAlreadyExists:
-			return "You already logged in."
+			return AlreadyLoggedIn, nil
 		default:
-			return "An internal error has occurred"
+			return InternalError, fmt.Errorf("failed to insert user in database, %v", err)
 		}
 	}
-	return "Login successful."
+	return LoginSuccessful, nil
 }
 
-func (s *Service) GrantAccess(userId int64, request string) string {
+func (s *Service) GrantAccess(userId int64, request string) (string, error) {
 	tokens := strings.Split(request, " ")
 	// TODO parse multiply usernames
-	if len(tokens) > 2 || tokens[1][0] != '@' {
-		return "Incorrect use of the command!\n\n" +
-			"You must specify only the user you want to give access to - /grant_access @username\n\n"
+	if len(tokens) != 2 || tokens[1][0] != '@' {
+		return fmt.Sprintf(IncorrectUsageOfCommand, "give", "/grant_access"), nil
 	}
 	userNameWithAccess := tokens[1][1:] //remove @ from username
 
 	_, err := s.repo.GetUser(userNameWithAccess)
 	// TODO check isActive
 	if err != nil {
-		return fmt.Sprintf("@%s not logged in.", userNameWithAccess)
+		return fmt.Sprintf(NotLoggedIn, userNameWithAccess), nil
 	}
 
 	err = s.repo.AddNotificationAccess(userId, userNameWithAccess)
 	if err != nil {
-		s.logger.Error().Msgf("failed to add notification access database, %v", err)
 		switch err {
 		case repository.ErrAlreadyExists:
-			return fmt.Sprintf("@%s already has access to send you notifications.", userNameWithAccess)
+			return fmt.Sprintf(AlreadyHasAccess, userNameWithAccess), nil
 		default:
-			return "An internal error has occurred"
+			return InternalError, fmt.Errorf("failed to grant access to the user %v, %v",
+				userNameWithAccess, err)
 		}
 	}
 
-	return fmt.Sprintf("@%s can now send you notifications", userNameWithAccess)
+	return fmt.Sprintf(CanSendNotifications, userNameWithAccess), nil
 }
 
-func (s *Service) RemoveAccess(userId int64, request string) string {
+func (s *Service) RemoveAccess(userId int64, request string) (string, error) {
 	tokens := strings.Split(request, " ")
 	// TODO parse multiply usernames
 	if len(tokens) > 2 || tokens[1][0] != '@' {
-		return "Incorrect use of the command!\n\n" +
-			"You must specify only the user you want to deny access to - /remove_access @username\n\n"
+		return fmt.Sprintf(IncorrectUsageOfCommand, "deny", "/remove_access"), nil
 	}
 	userNameWithAccess := tokens[1][1:] //remove @ from username
 
 	_, err := s.repo.GetUser(userNameWithAccess)
 	// TODO check isActive
 	if err != nil {
-		return fmt.Sprintf("@%s not logged in.", userNameWithAccess)
+		return fmt.Sprintf(NotLoggedIn, userNameWithAccess), nil
 	}
 
 	err = s.repo.RemoveNotificationAccess(userId, userNameWithAccess)
 	if err != nil {
-		s.logger.Error().Msgf("failed to remove notification access database, %v", err)
 		switch err {
 		case repository.ErrNotExists:
-			return fmt.Sprintf("@%s does not have access to send you notifications.", userNameWithAccess)
+			return fmt.Sprintf(HaveNotAccess, userNameWithAccess), nil
 		default:
-			return "An internal error has occurred"
+			return InternalError, fmt.Errorf("failed to remove access from user %v, %v",
+				userNameWithAccess, err)
 		}
 	}
 
-	return fmt.Sprintf("@%s can no longer send you notifications", userNameWithAccess)
+	return fmt.Sprintf(CantSendNotifications, userNameWithAccess), nil
 }

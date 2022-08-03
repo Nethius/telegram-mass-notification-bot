@@ -4,9 +4,6 @@ import (
 	"configuration_parser/internal/command_parser"
 	"configuration_parser/internal/repository/postgres"
 	"configuration_parser/internal/telegram_api"
-	"database/sql"
-	"errors"
-	"fmt"
 	"os"
 
 	"github.com/joho/godotenv"
@@ -20,24 +17,20 @@ func main() {
 
 	err := godotenv.Load()
 	if err != nil {
-		logger.Panic().Msg(err.Error())
+		logger.Panic().Msgf("failed to parse env: %v", err)
 	}
 
-	connStr, err := getPostgresCredentials()
+	repository, err := postgres.NewRepository()
 	if err != nil {
-		logger.Panic().Msgf("failed to get db credentials from env: %v", err)
+		logger.Panic().Msgf("failed to setup repository: %v", err)
 	}
+	defer repository.Close()
 
-	db, err := sql.Open("postgres", connStr)
+	parser := command_parser.NewService(repository)
+	tgApiService, err := telegram_api.NewService(logger, parser)
 	if err != nil {
-		logger.Panic().Msgf("failed to open db connection: %v", err)
+		logger.Panic().Msgf("failed to setup telegram api: %v", err)
 	}
-	// TODO handle error
-	defer db.Close()
-
-	repository := postgres.NewRepository(db)
-	parser := command_parser.NewService(logger, repository)
-	tgApiService := telegram_api.NewService(logger, parser)
 
 	logger.Fatal().Msgf("failed to listen telegram api server: %v", tgApiService.ListenAndServe())
 }
@@ -45,33 +38,4 @@ func main() {
 func initLogger() zerolog.Logger {
 	zerolog.SetGlobalLevel(zerolog.TraceLevel)
 	return zerolog.New(os.Stdout).With().Timestamp().Logger()
-}
-
-func getPostgresCredentials() (string, error) {
-	host, ok := os.LookupEnv("PGHOST")
-	if !ok {
-		return "", errors.New("failed to get PGHOST from env")
-	}
-
-	port, ok := os.LookupEnv("PGPORT")
-	if !ok {
-		return "", errors.New("failed to get PGPORT from env")
-	}
-
-	user, ok := os.LookupEnv("PGUSER")
-	if !ok {
-		return "", errors.New("failed to get PGUSER from env")
-	}
-
-	password, ok := os.LookupEnv("PGPASSWORD")
-	if !ok {
-		return "", errors.New("failed to get PGPASSWORD from env")
-	}
-
-	dbname, ok := os.LookupEnv("PGDATABASE")
-	if !ok {
-		return "", errors.New("failed to get PGDATABASE from env")
-	}
-
-	return fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable", host, port, user, password, dbname), nil
 }

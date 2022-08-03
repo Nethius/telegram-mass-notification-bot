@@ -4,10 +4,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/rs/zerolog"
-	"github.com/streadway/amqp"
 	"notification_sender/internal/model"
 	"os"
+
+	"github.com/rs/zerolog"
+	"github.com/streadway/amqp"
 )
 
 type sender interface {

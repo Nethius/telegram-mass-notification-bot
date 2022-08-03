@@ -3,6 +3,11 @@ package postgres
 import (
 	"configuration_parser/internal/repository"
 	"database/sql"
+	"errors"
+	"fmt"
+	"os"
+	"time"
+
 	"github.com/lib/pq"
 )
 
@@ -12,8 +17,38 @@ type Repository struct {
 	db *sql.DB
 }
 
-func NewRepository(db *sql.DB) *Repository {
-	return &Repository{db: db}
+func NewRepository() (*Repository, error) {
+	connStr, err := getPostgresCredentials()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get db credentials from env: %v", err)
+	}
+
+	db, err := sql.Open("postgres", connStr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open db connection: %v", err)
+	}
+
+	for i := 0; i < 3; i++ {
+		err = db.Ping()
+		if err == nil {
+			break
+		}
+		time.Sleep(time.Second * 2)
+	}
+	if err != nil {
+		db.Close()
+		return nil, fmt.Errorf("db connection is not active: %v", err)
+	}
+
+	return &Repository{db: db}, nil
+}
+
+func (repo *Repository) Close() error {
+	err := repo.db.Close()
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func (repo *Repository) InsertUser(userId int64, userName string) error {
@@ -34,8 +69,12 @@ func (repo *Repository) InsertUser(userId int64, userName string) error {
 func (repo *Repository) GetUser(userName string) (int64, error) {
 	q := `SELECT id FROM users WHERE username = $1`
 
-	var userId int64 = 0
+	var userId int64
 	row := repo.db.QueryRow(q, userName)
+	if err := row.Err(); err != nil {
+		return userId, err
+	}
+
 	if err := row.Scan(&userId); err != nil {
 		return userId, err
 	}
@@ -62,15 +101,44 @@ func (repo *Repository) RemoveNotificationAccess(userId int64, userNameWithAcces
 	q := `DELETE FROM notification_access where user_id = $1 and username_with_access = $2`
 
 	res, err := repo.db.Exec(q, userId, userNameWithAccess)
-	if err == nil {
-		count, err := res.RowsAffected()
-		if err == nil {
-			if count == 0 {
-				return repository.ErrNotExists
-			}
-			return nil
-		}
+	if err != nil {
 		return err
 	}
-	return err
+	count, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if count == 0 {
+		return repository.ErrNotExists
+	}
+	return nil
+}
+
+func getPostgresCredentials() (string, error) {
+	host, ok := os.LookupEnv("PGHOST")
+	if !ok {
+		return "", errors.New("failed to get PGHOST from env")
+	}
+
+	port, ok := os.LookupEnv("PGPORT")
+	if !ok {
+		return "", errors.New("failed to get PGPORT from env")
+	}
+
+	user, ok := os.LookupEnv("PGUSER")
+	if !ok {
+		return "", errors.New("failed to get PGUSER from env")
+	}
+
+	password, ok := os.LookupEnv("PGPASSWORD")
+	if !ok {
+		return "", errors.New("failed to get PGPASSWORD from env")
+	}
+
+	dbname, ok := os.LookupEnv("PGDATABASE")
+	if !ok {
+		return "", errors.New("failed to get PGDATABASE from env")
+	}
+
+	return fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable", host, port, user, password, dbname), nil
 }

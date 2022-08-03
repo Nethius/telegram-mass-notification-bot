@@ -1,10 +1,9 @@
 package sender
 
 import (
+	"notification_sender/internal/model"
 	"os"
 	"strconv"
-
-	"notification_sender/internal/model"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/rs/zerolog"
